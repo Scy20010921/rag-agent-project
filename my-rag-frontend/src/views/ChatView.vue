@@ -155,64 +155,64 @@
         </div>
       </div>
  
-      <!-- ========== 对话视图（发送消息后） ========== -->
-      <div v-else class="chat-wrap">
-        <div class="message-list" ref="messageListRef">
-          <template v-for="msg in messages" :key="msg.id">
-            <div v-if="msg.role === 'user'" class="user-bubble-row">
-              <div class="user-bubble">{{ msg.content }}</div>
-            </div>
-            <div v-else class="assistant-row">
-              <div v-if="!msg.content && isLoading" class="assistant-thinking">
-                <span class="think-jump"></span>
-                <span class="think-jump"></span>
-                <span class="think-jump"></span>
-              </div>
-              <div v-else class="assistant-text">{{ msg.content }}</div>
-            </div>
-          </template>
+<div v-else class="chat-wrap">
+  <!-- 消息列表区域：占满视口高度减去输入框高度，内容超出产生页面右侧滚动条 -->
+  <div class="message-scroll-wrap">
+    <div class="message-list" ref="messageListRef">
+      <template v-for="msg in messages" :key="msg.id">
+        <div v-if="msg.role === 'user'" class="user-bubble-row">
+          <div class="user-bubble">{{ msg.content }}</div>
         </div>
- 
-        <!-- 底部固定输入区 -->
-        <div class="chat-input-bar">
-          <div class="question-card">
-            <el-input
-              v-model="question"
-              type="textarea"
-              :rows="2"
-              :placeholder="inputPlaceholder"
-              class="question-input"
-              resize="none"
-              @keydown.enter.prevent="sendQuestion"
-            />
-            <div class="question-toolbar">
-              <div class="deep-think-toggle" :class="{ on: deepThink }" @click="deepThink = !deepThink">
-                <el-icon><MagicStick /></el-icon>
-                <span>深度思考</span>
-                <span v-if="deepThink" class="think-dot"></span>
-              </div>
-              <!-- 生成中 → 显示暂停按钮；未生成 → 显示发送按钮 -->
-              <div v-if="isLoading" class="stop-btn" @click="stopStream">
-                <el-icon><VideoPause /></el-icon>
-              </div>
-              <div v-else class="send-btn" :class="{ disabled: !question.trim() }" @click="sendQuestion">
-                <el-icon><Promotion /></el-icon>
-              </div>
-            </div>
+        <div v-else class="assistant-row">
+          <div v-if="!msg.content && isLoading" class="assistant-thinking">
+            <span class="think-jump"></span>
+            <span class="think-jump"></span>
+            <span class="think-jump"></span>
           </div>
- 
-          <div v-if="deepThink" class="deep-think-tip">
-            <el-icon><Opportunity /></el-icon>
-            <span>深度思考模式已开启，AI将进行更深入的分析推理</span>
-          </div>
- 
-          <div class="input-hint">
-            <kbd>Enter</kbd><span>发送</span>
-            <span class="dot">·</span>
-            <kbd>Shift + Enter</kbd><span>换行</span>
-          </div>
+          <div v-else class="assistant-text">{{ msg.content }}</div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- 底部固定输入区：fixed 悬浮窗口底部 -->
+  <div class="chat-input-bar">
+    <!-- 原有输入框代码不变 -->
+    <div class="question-card">
+      <el-input
+        v-model="question"
+        type="textarea"
+        :rows="2"
+        :placeholder="inputPlaceholder"
+        class="question-input"
+        resize="none"
+        @keydown.enter.prevent="sendQuestion"
+      />
+      <div class="question-toolbar">
+        <div class="deep-think-toggle" :class="{ on: deepThink }" @click="deepThink = !deepThink">
+          <el-icon><MagicStick /></el-icon>
+          <span>深度思考</span>
+          <span v-if="deepThink" class="think-dot"></span>
+        </div>
+        <div v-if="isLoading" class="stop-btn" @click="stopStream">
+          <el-icon><VideoPause /></el-icon>
+        </div>
+        <div v-else class="send-btn" :class="{ disabled: !question.trim() }" @click="sendQuestion">
+          <el-icon><Promotion /></el-icon>
         </div>
       </div>
+    </div>
+    <div v-if="deepThink" class="deep-think-tip">
+      <el-icon><Opportunity /></el-icon>
+      <span>深度思考模式已开启，AI将进行更深入的分析推理</span>
+    </div>
+    <div class="input-hint">
+      <kbd>Enter</kbd><span>发送</span>
+      <span class="dot">·</span>
+      <kbd>Shift + Enter</kbd><span>换行</span>
+    </div>
+  </div>
+</div>
     </el-main>
   </el-container>
 </template>
@@ -400,10 +400,15 @@ const startNewChat = () => {
 }
  
 // 滚动消息列表到底部
+// 滚动消息列表到底部
 const scrollToBottom = () => {
   nextTick(() => {
-    const el = messageListRef.value
-    if (el) el.scrollTop = el.scrollHeight
+    // 获取主滚动容器 main-content
+    const scrollDom = document.querySelector('.main-content')
+    if (scrollDom) {
+      // 直接把页面滚动到最底部
+      scrollDom.scrollTop = scrollDom.scrollHeight
+    }
   })
 }
  
@@ -470,16 +475,19 @@ const sendQuestion = async () => {
  
 .app-container {
   height: 100vh;
+  display: flex;
   background: radial-gradient(circle at 30% 20%, #eef2fb 0%, #f4f6fb 45%, #eef1f7 100%);
+  overflow: hidden; /* 整体视口锁住，不产生页面滚动 */
 }
  
-/* ===== 左侧边栏 ===== */
+/* 侧边栏保持不变，内部滚动 */
 .sidebar {
   background: #ffffff;
   border-right: 1px solid #ececf0;
   display: flex;
   flex-direction: column;
   padding: 22px 16px 16px 16px;
+  height: 100%;
 }
  
 .logo-area {
@@ -623,8 +631,6 @@ const sendQuestion = async () => {
 .history-section {
   flex: 1;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #d5dae2 transparent;
 }
 .history-section::-webkit-scrollbar {
   width: 5px;
@@ -687,27 +693,16 @@ const sendQuestion = async () => {
   cursor: pointer;
 }
  
-/* ===== 主内容区 ===== */
+/* ===== 主内容区（核心修改） ===== */
 .main-content {
-  display: flex;
-  flex-direction: column;
-  padding: 0 40px 30px 40px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #d5dae2 transparent;
+  flex: 1;
+  height: 100vh;
+  padding: 0 40px;
+  overflow-y: auto; /* 关键：主内容区滚动条 = 浏览器最右侧滚动条 */
+  padding-bottom: 220px; /* 底部预留输入框空白，防止文字被fixed输入框遮挡 */
 }
 .main-content::-webkit-scrollbar {
-  width: 6px;
-}
-.main-content::-webkit-scrollbar-track {
-  background: transparent;
-}
-.main-content::-webkit-scrollbar-thumb {
-  background: #d5dae2;
-  border-radius: 3px;
-}
-.main-content::-webkit-scrollbar-thumb:hover {
-  background: #b9c0cc;
+  display: none;
 }
  
 /* 顶部栏（对话态） */
@@ -722,6 +717,7 @@ const sendQuestion = async () => {
   z-index: 5;
   background: #f2f4fa;
 }
+
 .top-bar-new-chat {
   font-size: 14px;
   color: #1d2129;
@@ -764,7 +760,7 @@ const sendQuestion = async () => {
   flex-direction: column;
   align-items: center;
   padding-top: 60px;
-  flex-shrink: 0;
+  min-height: 100vh;
 }
  
 .hero-badge {
@@ -1009,23 +1005,32 @@ const sendQuestion = async () => {
   text-overflow: ellipsis;
 }
  
-/* ========== 对话视图 ========== */
+/* ========== 对话视图（重点修复） ========== */
 .chat-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 100%;
+  position: relative;
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
+  padding-top: 10px;
 }
- 
+.message-scroll-wrap {
+  width: 100%;
+}
 .message-list {
-  flex: 1;
   padding: 10px 4px 20px 4px;
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+.message-list::-webkit-scrollbar {
+  width: 6px;
+}
+.message-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.message-list::-webkit-scrollbar-thumb {
+  background: #d5dae2;
+  border-radius: 3px;
 }
  
 .user-bubble-row {
@@ -1089,11 +1094,13 @@ const sendQuestion = async () => {
  
 /* 对话态底部固定输入区：吸附在可视区域底部 */
 .chat-input-bar {
-  flex-shrink: 0;
-  position: sticky;
+  position: fixed;
   bottom: 0;
-  padding-top: 8px;
-  padding-bottom: 4px;
-  background: linear-gradient(to top, #f2f4fa 60%, rgba(242, 244, 250, 0));
+  left: 270px; /* 和侧边栏宽度一致，侧边栏270px */
+  right: 0;
+  padding: 12px 300px 8px;
+  background: #f2f4fa;
+  z-index: 100;
+  border-top: 1px solid #e5e8ef;
 }
 </style>
