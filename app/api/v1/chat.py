@@ -1,13 +1,57 @@
-
 import json
 import asyncio
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage,AIMessage
+from langchain_core.messages import HumanMessage, AIMessage
+from pydantic import BaseModel
 from app.schemas.chat import ChatRequest
 from app.agents.graph import build_chat_graph
+from app.core.session_store import (
+    create_session, list_sessions, get_session, delete_session,
+    save_message, load_messages,
+)
 
 router = APIRouter(prefix="/v1/chat", tags=["chat"])
+
+
+# ---- Pydantic schemas for REST ----
+
+class CreateSessionRequest(BaseModel):
+    title: str = "新对话"
+
+
+# ---- 会话 REST API ----
+
+@router.get("/sessions")
+async def api_list_sessions():
+    """获取所有会话列表"""
+    return {"sessions": list_sessions()}
+
+
+@router.post("/sessions")
+async def api_create_session(req: CreateSessionRequest):
+    """创建新会话，返回 session_id"""
+    import uuid
+    sid = str(uuid.uuid4())
+    session = create_session(sid, title=req.title)
+    return session
+
+
+@router.get("/sessions/{session_id}/messages")
+async def api_load_messages(session_id: str):
+    """加载指定会话的所有消息"""
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    msgs = load_messages(session_id)
+    return {"session": session, "messages": msgs}
+
+
+@router.delete("/sessions/{session_id}")
+async def api_delete_session(session_id: str):
+    """删除指定会话"""
+    delete_session(session_id)
+    return {"ok": True}
 
 
 # ==================== SSE 端点（保留） ====================
@@ -42,36 +86,27 @@ async def chat_stream(request: ChatRequest):
     )
 
 
-# ==================== WebSocket 端点（支持暂停） ====================
+# ==================== WebSocket 端点 ====================
 
 @router.websocket("/ws")
 async def chat_ws(websocket: WebSocket):
     await websocket.accept()
-    messages_history = []
-    # 当前正在运行的流式任务，None 表示没有在生成
+
     stream_task: asyncio.Task | None = None
-    # 取消信号：set 表示用户请求停止
     stop_event = asyncio.Event()
+    messages_history: list = []
+    # 当前 WebSocket 连接绑定的会话 ID
+    current_session_id: str | None = None
 
     async def run_stream(messages: list, model_type: str) -> str:
-        """
-        运行 LangGraph 流式生成，逐 token 推送。
-        参数 messages 为完整对话历史（含本轮用户消息）。
-        返回 AI 回复的完整文本（被暂停时返回已生成的部分）。
-        """
         graph = build_chat_graph()
         initial_state = {
-            "messages":messages,
+            "messages": messages,
             "model_type": model_type,
         }
-        # 新增：打印传给 LLM 的消息数量和最后一条用户消息
-        user_msgs = [m for m in messages if isinstance(m, HumanMessage)]
-        print(f"[run_stream] 消息总数: {len(messages)}, 用户消息数: {len(user_msgs)}")
-        print(f"[run_stream] 最近用户消息: {user_msgs[-1].content if user_msgs else '无'}")
         full_response = ""
         try:
             async for event in graph.astream_events(initial_state, version="v2"):
-                # 每次迭代检查是否被取消
                 if stop_event.is_set():
                     await websocket.send_json({"event": "stopped", "data": "用户停止了生成"})
                     return full_response
@@ -86,9 +121,8 @@ async def chat_ws(websocket: WebSocket):
                         })
                 elif event["event"] == "on_chain_end" and event["name"] == "LangGraph":
                     await websocket.send_json({"event": "done", "data": "[DONE]"})
-                    return  full_response
+                    return full_response
 
-            # 兜底 done
             await websocket.send_json({"event": "done", "data": "[DONE]"})
             return full_response
         except asyncio.CancelledError:
@@ -98,14 +132,14 @@ async def chat_ws(websocket: WebSocket):
             await websocket.send_json({"event": "error", "data": str(e)})
             return full_response
 
-    async def _run_and_record(coro, history: list):
-        """
-        运行流式生成协程，并在完成后把 AI 回复追加到对话历史。
-        这样主循环可以立即回到 receive_text() 而不用等待流结束。
-        """
+    async def _run_and_record(coro, history: list, session_id: str | None):
         response = await coro
         if response:
             history.append(AIMessage(content=response))
+            # 持久化 AI 回复
+            if session_id:
+                save_message(session_id, "assistant", response)
+
     try:
         while True:
             raw = await websocket.receive_text()
@@ -113,23 +147,55 @@ async def chat_ws(websocket: WebSocket):
             msg_type = msg.get("type", "")
 
             if msg_type == "chat":
-                # 如果有正在跑的流，先停掉 （旧回复已由 _run_and_record 存入历史）
                 if stream_task and not stream_task.done():
                     stop_event.set()
                     try:
                         await stream_task
                     except asyncio.CancelledError:
                         pass
-                        # 把本轮用户消息追加到历史
-                messages_history.append(HumanMessage(content=msg["message"]))
-                print(f"[WS] 历史长度: {len(messages_history)}")  # 临时加的调试日志
+
+                # 区分：切换会话（load）还是新消息（chat）
+                sid = msg.get("session_id")
+                if sid and sid != current_session_id:
+                    # 切换到指定会话
+                    current_session_id = sid
+                    messages_history.clear()
+                    if get_session(sid):
+                        db_msgs = load_messages(sid)
+                        for m in db_msgs:
+                            if m["role"] == "user":
+                                messages_history.append(HumanMessage(content=m["content"]))
+                            else:
+                                messages_history.append(AIMessage(content=m["content"]))
+                        # 把历史消息推给前端
+                        await websocket.send_json({"event": "history", "data": db_msgs})
+
+                # 如果不带 message 字段，只是加载历史，不调 LLM
+                if not msg.get("message"):
+                    continue
+
+                # 如果还没有 session_id，自动创建
+                if not current_session_id:
+                    import uuid
+                    current_session_id = str(uuid.uuid4())
+                    create_session(current_session_id)
+                    await websocket.send_json({
+                        "event": "session_created",
+                        "data": {"session_id": current_session_id}
+                    })
+
+                # 用户消息加入历史 + 持久化
+                user_content = msg["message"]
+                messages_history.append(HumanMessage(content=user_content))
+                save_message(current_session_id, "user", user_content)
+
                 model_type = msg.get("model_type", "ollama")
-                # 重置状态，启动新的流
                 stop_event.clear()
                 stream_task = asyncio.create_task(
                     _run_and_record(
                         run_stream(list(messages_history), model_type),
                         messages_history,
+                        current_session_id,
                     )
                 )
 
@@ -143,6 +209,5 @@ async def chat_ws(websocket: WebSocket):
                     stream_task = None
 
     except WebSocketDisconnect:
-        # 客户端断开，取消正在跑的任务
         if stream_task and not stream_task.done():
             stop_event.set()
