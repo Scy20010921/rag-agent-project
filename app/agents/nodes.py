@@ -1,7 +1,7 @@
 from typing import Dict, Any, AsyncGenerator
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from app.core.llm_factory import get_llm_by_type
-
+from app.agents.tools import TOOLS
 
 async def call_model(state: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -14,6 +14,9 @@ async def call_model(state: Dict[str, Any]) -> Dict[str, Any]:
         return {"messages": []}
 
     llm = get_llm_by_type(model_type)
+    # bind_tools：让 LLM 知道有哪些工具可用
+    llm_with_tools = llm.bind_tools(TOOLS)
     # 这里仍然用 invoke，因为 astream_events 会在路由层监听模型流
-    response = await llm.ainvoke(messages)  # 注意异步调用
+    response = await llm_with_tools.ainvoke(messages)
+    # response = await llm.ainvoke(messages)  # 注意异步调用
     return {"messages": [response]}
