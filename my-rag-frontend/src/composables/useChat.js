@@ -35,9 +35,15 @@ export function useChat(question, deepThink, sessionsCtx, systemPrompt, getScrol
           if (!currentAssistantMsg) return
           currentAssistantMsg.content += json.data
           scrollToBottom()
-        } else if (json.event === 'done') {
+        }else if (json.event === 'status') {
+        const statusCard = reactive({ id: Date.now(), role: 'status', text: json.data })
+        messages.value.push(statusCard)
+        scrollToBottom()
+        }else if (json.event === 'done') {
           isLoading.value = false
           currentAssistantMsg = null
+          // ✅ 移除所有 role === 'status' 的消息
+          messages.value = messages.value.filter(m => m.role !== 'status')
           sessionsCtx.refreshSessions?.()
         } else if (json.event === 'stopped') {
           isLoading.value = false

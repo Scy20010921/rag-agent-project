@@ -2,6 +2,10 @@
   <div class="chat-wrap">
     <div class="message-list" ref="messageListRef">
       <template v-for="msg in messages" :key="msg.id || msg.created_at">
+        <!-- 状态提示（"正在思考..."、"正在调用工具..."） -->
+        <div v-if="msg.role === 'status'" class="status-row">
+          <div class="status-text">{{ msg.text }}</div>
+        </div>
         <!-- 用户消息 -->
         <div v-if="msg.role === 'user'" class="user-bubble-row"><div class="user-bubble">{{ msg.content }}</div></div>
         <!-- 工具调用卡片 -->
@@ -20,7 +24,7 @@
         <!-- AI 回复 -->
         <div v-else class="assistant-row">
           <div v-if="!msg.content && isLoading && msg === currentAssistantMsg" class="assistant-thinking"><span class="think-jump"></span><span class="think-jump"></span><span class="think-jump"></span></div>
-          <div v-else class="assistant-text">{{ msg.content }}</div>
+          <div v-else class="assistant-text markdown-body" v-html="renderMarkdown(msg.content)"></div>
         </div>
       </template>
     </div>
@@ -46,6 +50,7 @@
 import { ref } from 'vue'
 import { Tools, Opportunity } from '@element-plus/icons-vue'
 import QuestionInput from './QuestionInput.vue'
+import { renderMarkdown } from '../utils/markdown.js'
 
 defineProps({
   question: String,
@@ -62,6 +67,8 @@ defineEmits(['send', 'stop', 'update:question', 'update:deepThink'])
 </script>
 
 <style scoped>
+.status-row { display: flex; justify-content: flex-start; }
+.status-text { font-size: 13px; color: #94a3b8; padding: 2px 4px; font-style: italic; }
 .chat-wrap { flex: 1; display: flex; flex-direction: column; width: 100%; max-width: 900px; margin: 0 auto; min-height: 0; }
 .message-list { flex: 1; overflow-y: auto; padding: 10px 4px 20px 4px; display: flex; flex-direction: column; gap: 18px; scrollbar-width: thin; scrollbar-color: #d5dae2 transparent; }
 .message-list::-webkit-scrollbar { width: 6px; }
@@ -71,7 +78,19 @@ defineEmits(['send', 'stop', 'update:question', 'update:deepThink'])
 .user-bubble-row { display: flex; justify-content: flex-end; }
 .user-bubble { max-width: 70%; background: #d8e6ff; color: black; font-size: 14.5px; line-height: 1.6; padding: 10px 16px; border-radius: 16px 16px 4px 16px; white-space: pre-wrap; word-break: break-word; }
 .assistant-row { display: flex; justify-content: flex-start; }
-.assistant-text { max-width: 80%; font-size: 14.5px; line-height: 1.7; color: #1d2129; white-space: pre-wrap; word-break: break-word; }
+.assistant-text { max-width: 80%; font-size: 14.5px; line-height: 1.7; color: #1d2129; white-space: normal; word-break: break-word; }
+.assistant-text :deep(p) { margin: 0 0 10px 0; }
+.assistant-text :deep(p:last-child) { margin-bottom: 0; }
+.assistant-text :deep(code) { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: 'Menlo', 'Monaco', monospace; }
+.assistant-text :deep(pre) { background: #f5f9ff; color: #e2e8f0; border-radius: 8px; padding: 14px 16px; overflow-x: auto; margin: 10px 0; }
+.assistant-text :deep(pre code) { background: none; padding: 0; font-size: 13px; }
+.assistant-text :deep(ul), .assistant-text :deep(ol) { padding-left: 20px; margin: 10px 0; }
+.assistant-text :deep(li) { margin-bottom: 4px; }
+.assistant-text :deep(strong) { font-weight: 600; }
+.assistant-text :deep(blockquote) { border-left: 3px solid #4f7fff; padding-left: 12px; color: #64748b; margin: 10px 0; }
+.assistant-text :deep(table) { border-collapse: collapse; width: 100%; margin: 10px 0; }
+.assistant-text :deep(th), .assistant-text :deep(td) { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; font-size: 13px; }
+.assistant-text :deep(th) { background: #f8fafc; font-weight: 600; }
 .assistant-thinking { display: flex; align-items: center; gap: 5px; padding: 4px 0; }
 .think-jump { width: 6px; height: 6px; border-radius: 50%; background: #c2c8d1; animation: think-jump-anim 1.1s infinite ease-in-out; }
 .think-jump:nth-child(2) { animation-delay: 0.15s; }

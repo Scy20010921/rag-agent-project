@@ -114,6 +114,7 @@ async def chat_ws(websocket: WebSocket):
             "model_type": model_type, # "ollama" 或 "qwen_api"
         }
         full_response = ""      #累积完整的回复内容，最后会返回给调用方（用于存储）
+        has_sent_thinking = False
         try:
 
             # graph.astream_events(initial_state, version="v2") 会持续产生事件，直到图执行完毕。常见事件类型
@@ -132,6 +133,13 @@ async def chat_ws(websocket: WebSocket):
                     # hasattr(chunk, "content") 检查 chunk 这个对象有没有 content 属性（防止某些事件对象没有该字段）
                     # chunk.content 取 content 属性的值，然后在 if 上下文中做真值判断
                     if hasattr(chunk, "content") and chunk.content:
+                        # 第一个 token 时推送"正在思考"状态
+                        if not has_sent_thinking:
+                            has_sent_thinking = True
+                            await websocket.send_json({
+                                "event": "status",
+                                "data": "正在思考..."
+                            })
                         # #累积完整的回复内容，最后会返回给调用方（用于存储）
                         full_response += chunk.content
                         #把 LLM 生成的每一个文本块（token），实时通过 WebSocket 推送给前端，让前端实现“打字机效果”。
@@ -153,6 +161,11 @@ async def chat_ws(websocket: WebSocket):
                 # 工具调用开始 → 通知前端显示"正在调用 xxx"
                 elif event["event"] == "on_tool_start":
                     tool_input = event["data"].get("input", {})
+                    # 推送"正在调用工具"状态
+                    await websocket.send_json({
+                        "event": "status",
+                        "data": f"🔧 正在调用工具: {event['name']}"
+                    })
                     await websocket.send_json({
                         "event": "tool_start",
                         "data": {
@@ -163,6 +176,10 @@ async def chat_ws(websocket: WebSocket):
                     # 工具调用结束 → 通知前端显示结果
                 elif event["event"] == "on_tool_end":
                     tool_output = event["data"].get("output", "")
+                    await websocket.send_json({
+                        "event": "status",
+                        "data": f"✅ 工具 {event['name']} 执行完成"
+                    })
                     await websocket.send_json({
                         "event": "tool_end",
                         "data": {
