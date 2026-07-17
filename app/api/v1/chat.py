@@ -2,7 +2,7 @@ import json
 import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage,SystemMessage
 from pydantic import BaseModel
 from app.schemas.chat import ChatRequest
 from app.agents.graph import build_chat_graph
@@ -103,10 +103,14 @@ async def chat_ws(websocket: WebSocket):
     current_session_id: str | None = None
 
 #传入对话历史和模型名称
-    async def run_stream(messages: list, model_type: str) -> str:
+    async def run_stream(messages: list, model_type: str, system_prompt: str = "") -> str:
         graph = build_chat_graph() #构建好的 LangGraph 图
+        # 如果有 system prompt，插入到消息列表最前面
+        msgs_for_llm = list(messages)
+        if system_prompt:
+            msgs_for_llm = [SystemMessage(content=system_prompt)] + msgs_for_llm
         initial_state = {
-            "messages": messages, # 对话历史（LangChain 格式）
+            "messages": msgs_for_llm, # 对话历史（LangChain 格式）
             "model_type": model_type, # "ollama" 或 "qwen_api"
         }
         full_response = ""      #累积完整的回复内容，最后会返回给调用方（用于存储）
@@ -272,13 +276,15 @@ async def chat_ws(websocket: WebSocket):
                 # 从请求中获取模型类型（默认为 "ollama"），清空停止信号，然后创建一个异步任务来执行 LLM 流式生成，并自动记录 AI 回复到历史中。
                 #从前端发来的字典中取 model_type 字段，如果没有则默认 "ollama"
                 model_type = msg.get("model_type", "ollama")
+                system_prompt = msg.get("system_prompt", "")
+                print(system_prompt)
                 #把停止信号重置为 False（未触发状态）
                 stop_event.clear()
                 #asyncio.create_task()创建一个异步任务，并立即开始执行（不阻塞当前代码）
                 stream_task = asyncio.create_task(
                     #_run_and_record 包装函数：先执行生成，成功后把 AI 回复存到 messages_history 和数据库
                     _run_and_record(
-                        run_stream(list(messages_history), model_type), # 参数1：协程对象
+                        run_stream(list(messages_history), model_type, system_prompt), # 参数1：协程对象
                         messages_history,            # 参数2：历史列表（引用）
                         current_session_id,         # 参数3：会话ID
                     )
