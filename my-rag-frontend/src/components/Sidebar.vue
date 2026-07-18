@@ -47,7 +47,7 @@
       <div v-show="docOpen" class="doc-body">
         <el-upload
           ref="uploadRef"
-          :action="`${API_BASE}/documents`"
+          :action="`${API_BASE}/documents/upload`"
           :on-success="handleUploadSuccess"
           :on-error="handleUploadError"
           :show-file-list="false"

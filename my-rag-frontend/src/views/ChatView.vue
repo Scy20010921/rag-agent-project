@@ -85,6 +85,18 @@ const docs = ref([])
 
 const getScrollEl = () => chatViewRef.value?.messageListRef || null
 const { sessions, currentSessionId, refreshSessions, switchSession, startNewChat } = useSessions()
+
+// 用户 ID（用于文档隔离的检索）
+function getUserId() {
+  let uid = localStorage.getItem('rag_user_id')
+  if (!uid) {
+    uid = 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+    localStorage.setItem('rag_user_id', uid)
+  }
+  return uid
+}
+const userId = getUserId()
+
 const chat = useChat(question, deepThink, { currentSessionId, refreshSessions }, systemPrompt, getScrollEl)
 
 const {
@@ -102,10 +114,15 @@ onUnmounted(() => disconnectWs())
 // ---- 文档管理 ----
 
 const refreshDocs = async () => {
-  try {
-    const res = await fetch(`${API_BASE}/documents`)
-    const data = await res.json()
-    docs.value = data.documents || []
+try {
+    // 同时拉公共文档和用户私有文档，合并展示
+    const [publicRes, userRes] = await Promise.all([
+      fetch(`${API_BASE}/documents/public`),
+      fetch(`${API_BASE}/documents/user/list?user_id=${userId}`),
+    ])
+    const publicData = await publicRes.json()
+    const userData = await userRes.json()
+    docs.value = [...(publicData.documents || []), ...(userData.documents || [])]
   } catch (e) {
     console.error('获取文档列表失败:', e)
   }
@@ -133,7 +150,7 @@ const handleSwitchSession = (sid) => {
   switchSession(sid, () => {
     resetMessages()
     question.value = ''
-    chat.ws_send({ type: 'chat', session_id: sid })
+    chat.ws_send({ type: 'chat', session_id: sid, user_id: userId })
   })
 }
 </script>
