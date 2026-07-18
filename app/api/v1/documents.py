@@ -3,7 +3,7 @@ import os
 import sys
 import uuid
 import traceback
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form,Query
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.core.config import settings
 from app.core.doc_store import (
@@ -120,7 +120,7 @@ async def upload_user(file: UploadFile = File(...), user_id: str = Form(...)):
 
 
 @router.get("/user/list")
-async def api_list_user_documents(user_id: str = Form(...)):
+async def api_list_user_documents(user_id: str = Query(...)):
     docs = list_user_documents(user_id)
     return {"documents": docs}
 

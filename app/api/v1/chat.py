@@ -212,7 +212,7 @@ async def chat_ws(websocket: WebSocket):
             if session_id:      ## ④ 如果有会话 ID
                 save_message(session_id, "assistant", response)  # ⑤ 存入数据库
     try:
-        print("1")
+        print("123")
         while True:
             raw = await websocket.receive_text()
             # raw输出为{"type":"chat","message":"await websocket.accept()的作用","session_id":"e1cac807-5f34-4d7b-9832-cac3c1857388","model_type":"ollama"}
