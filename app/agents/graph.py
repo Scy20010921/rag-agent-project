@@ -1,8 +1,8 @@
 from typing import TypedDict, List, Annotated, Literal
-from langchain_core.messages import BaseMessage, ToolMessage
+from langchain_core.messages import BaseMessage
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
-from app.agents.nodes import call_model
+from app.agents.nodes import call_model, retrieve
 from app.agents.tools import TOOLS
 from langgraph.prebuilt import ToolNode
 class AgentState(TypedDict):
@@ -24,20 +24,25 @@ def _should_continue(state: AgentState) -> Literal["tool_execute", "__end__"]:
 
 def build_chat_graph():
     """
-       构建工具调用 Agent 图：
-       call_model → (有tool_calls?) → tool_execute → call_model → ... → END
+    RAG Agent 图：
+    retrieve → call_model → (tool_calls?) → tool_execute → call_model → ... → END
+    retrieve 节点内部会先检查知识库是否为空——空则跳过检索直接走 call_model。
        """
     # 工具执行节点：LangGraph 内置 ToolNode，自动匹配 tool_call 名称
     tool_node = ToolNode(TOOLS)
 
     graph = StateGraph(AgentState)
 
-    # call_model 节点：异步调用 LLM（带工具绑定）
+    # 检索节点
+    graph.add_node("retrieve", retrieve)
+    # 模型节点
     graph.add_node("call_model", call_model)
     # 工具执行节点
     graph.add_node("tool_execute", tool_node)
 
-    graph.set_entry_point("call_model")
+    graph.set_entry_point("retrieve")
+    # retrieve → call_model
+    graph.add_edge("retrieve", "call_model")
 
     # call_model 之后按条件路由
     graph.add_conditional_edges(

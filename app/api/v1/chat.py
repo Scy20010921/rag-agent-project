@@ -116,7 +116,7 @@ async def chat_ws(websocket: WebSocket):
         full_response = ""      #累积完整的回复内容，最后会返回给调用方（用于存储）
         has_sent_thinking = False
         try:
-
+    
             # graph.astream_events(initial_state, version="v2") 会持续产生事件，直到图执行完毕。常见事件类型
             # on_chain_start 某个节点开始执行 on_chat_model_stream LLM 生成了一个 token on_tool_start 工具开始调用（如果有） on_chain_end 某个节点（包括整个图）执行完成
             async for event in graph.astream_events(initial_state, version="v2"):

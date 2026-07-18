@@ -38,6 +38,37 @@
       </ul>
     </div>
 
+    <!-- 知识库管理 -->
+    <div class="doc-section">
+      <div class="doc-header" @click="docOpen = !docOpen">
+        <span class="doc-label">📚 知识库</span>
+        <el-icon class="doc-arrow" :class="{ open: docOpen }"><ArrowRight /></el-icon>
+      </div>
+      <div v-show="docOpen" class="doc-body">
+        <el-upload
+          ref="uploadRef"
+          :action="`${API_BASE}/documents`"
+          :on-success="handleUploadSuccess"
+          :on-error="handleUploadError"
+          :show-file-list="false"
+          accept=".txt,.md,.pdf"
+        >
+          <div class="upload-btn">
+            <el-icon><UploadFilled /></el-icon>
+            <span>上传文档</span>
+          </div>
+        </el-upload>
+        <ul class="doc-list">
+          <li v-for="d in documents" :key="d.id" class="doc-item">
+            <span class="doc-name" :title="d.filename">{{ d.filename }}</span>
+            <span class="doc-status" :class="d.status">{{ d.status === 'ready' ? `✓ ${d.chunk_count}段` : d.status }}</span>
+            <el-icon class="doc-del" @click.stop="handleDeleteDoc(d.id)"><Delete /></el-icon>
+          </li>
+          <li v-if="documents.length === 0" class="doc-empty">暂无文档</li>
+        </ul>
+      </div>
+    </div>
+
     <div class="user-info">
       <el-avatar :size="32" src="https://cube.elemecdn.com/0/88/03b0d39583f48206768a53f6f0f6dpng.png" />
       <span class="user-name">admin</span>
@@ -46,15 +77,34 @@
 </template>
 
 <script setup>
-import { ChatDotRound, Plus } from '@element-plus/icons-vue'
+import { ref } from 'vue'
+import { ChatDotRound, Plus, ArrowRight, UploadFilled, Delete } from '@element-plus/icons-vue'
+
+const API_BASE = 'http://localhost:8000/v1'
 
 defineProps({
   hasMessages: Boolean,
   sessions: { type: Array, default: () => [] },
   currentSessionId: { type: String, default: null },
+  documents: { type: Array, default: () => [] },
 })
 
-defineEmits(['newChat', 'switchSession'])
+const emit = defineEmits(['newChat', 'switchSession', 'uploadDone', 'deleteDoc'])
+
+const docOpen = ref(false)
+const uploadRef = ref(null)
+
+const handleUploadSuccess = (response) => {
+  emit('uploadDone')
+}
+
+const handleUploadError = (err) => {
+  console.error('上传失败:', err)
+}
+
+const handleDeleteDoc = (docId) => {
+  emit('deleteDoc', docId)
+}
 </script>
 
 <style scoped>
@@ -74,7 +124,7 @@ defineEmits(['newChat', 'switchSession'])
 .new-chat-text { display: flex; flex-direction: column; line-height: 1.3; }
 .new-chat-title { font-size: 13.5px; font-weight: 600; color: #1d2129; }
 .new-chat-sub { font-size: 11px; color: #9aa3b2; }
-.history-section { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #d5dae2 transparent; }
+.history-section { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #d5dae2 transparent; min-height: 0; }
 .history-section::-webkit-scrollbar { width: 5px; }
 .history-section::-webkit-scrollbar-track { background: transparent; }
 .history-section::-webkit-scrollbar-thumb { background: #e0e3e9; border-radius: 3px; }
@@ -84,6 +134,27 @@ defineEmits(['newChat', 'switchSession'])
 .history-item:hover { background: #f5f6f9; }
 .history-item.active { background: #eef2ff; color: #4f7fff; font-weight: 500; }
 .history-item-empty { font-size: 12.5px; color: #b0b8c4; padding: 9px 8px; }
+
+/* 知识库 */
+.doc-section { border-top: 1px solid #f0f2f5; padding-top: 10px; }
+.doc-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 8px 6px; cursor: pointer; }
+.doc-label { font-size: 12px; color: #b0b8c4; }
+.doc-arrow { font-size: 12px; color: #b0b8c4; transition: transform 0.2s; }
+.doc-arrow.open { transform: rotate(90deg); }
+.doc-body { padding: 0 4px; }
+.upload-btn { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px dashed #c7d2fe; border-radius: 8px; cursor: pointer; font-size: 12.5px; color: #4f7fff; transition: background 0.15s; }
+.upload-btn:hover { background: #eef2ff; }
+.doc-list { list-style: none; margin: 8px 0 0 0; padding: 0; max-height: 160px; overflow-y: auto; }
+.doc-item { display: flex; align-items: center; gap: 6px; padding: 6px 6px; border-radius: 6px; font-size: 12px; }
+.doc-item:hover { background: #f5f6f9; }
+.doc-name { flex: 1; color: #4e5969; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-status { font-size: 11px; color: #b0b8c4; }
+.doc-status.ready { color: #22c55e; }
+.doc-status.error { color: #f56c6c; }
+.doc-del { font-size: 13px; color: #c2c8d1; cursor: pointer; }
+.doc-del:hover { color: #f56c6c; }
+.doc-empty { font-size: 12px; color: #b0b8c4; padding: 6px; }
+
 .user-info { display: flex; align-items: center; gap: 10px; padding: 14px 6px 0 6px; border-top: 1px solid #f0f2f5; font-size: 14px; color: #303133; margin-top: 10px; }
 .user-name { flex: 1; }
 </style>

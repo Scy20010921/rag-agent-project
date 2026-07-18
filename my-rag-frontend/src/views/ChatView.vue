@@ -4,8 +4,11 @@
       :hasMessages="hasMessages"
       :sessions="sessions"
       :currentSessionId="currentSessionId"
+      :documents="docs"
       @newChat="handleNewChat"
       @switchSession="handleSwitchSession"
+      @uploadDone="refreshDocs"
+      @deleteDoc="handleDeleteDoc"
     />
 
     <el-main class="main-content">
@@ -72,15 +75,15 @@ import SystemPromptDialog from '../components/SystemPromptDialog.vue'
 import { useSessions } from '../composables/useSessions'
 import { useChat } from '../composables/useChat'
 
+const API_BASE = 'http://localhost:8000/v1'
 const question = ref('')
 const deepThink = ref(false)
 const systemPrompt = ref('')
 const showPromptDialog = ref(false)
 const chatViewRef = ref(null)
+const docs = ref([])
 
-// 滚动函数：从 ChatView_ 拿 messageListRef DOM 元素
 const getScrollEl = () => chatViewRef.value?.messageListRef || null
-
 const { sessions, currentSessionId, refreshSessions, switchSession, startNewChat } = useSessions()
 const chat = useChat(question, deepThink, { currentSessionId, refreshSessions }, systemPrompt, getScrollEl)
 
@@ -92,8 +95,32 @@ const {
 onMounted(() => {
   connectWs()
   refreshSessions()
+  refreshDocs()
 })
 onUnmounted(() => disconnectWs())
+
+// ---- 文档管理 ----
+
+const refreshDocs = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/documents`)
+    const data = await res.json()
+    docs.value = data.documents || []
+  } catch (e) {
+    console.error('获取文档列表失败:', e)
+  }
+}
+
+const handleDeleteDoc = async (docId) => {
+  try {
+    await fetch(`${API_BASE}/documents/${docId}`, { method: 'DELETE' })
+    refreshDocs()
+  } catch (e) {
+    console.error('删除文档失败:', e)
+  }
+}
+
+// ---- 会话 ----
 
 const handleNewChat = () => {
   if (isLoading.value) stopStream()
