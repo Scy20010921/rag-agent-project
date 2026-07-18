@@ -12,12 +12,14 @@ def get_ollama_llm(temperature: float = 0.7):
     )
 
 def get_qwen_api_llm(temperature: float = 0.7):
-    """获取千问百炼 API LLM 实例"""
     return ChatTongyi(
         model=settings.qwen_model_name,
         dashscope_api_key=settings.dashscope_api_key,
         temperature=temperature,
         streaming=True,
+        model_kwargs={
+            "result_format": "message"
+        }
     )
 
 def get_llm_by_type(model_type: str, temperature: float = 0.7):

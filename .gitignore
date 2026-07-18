@@ -42,3 +42,5 @@ my-rag-frontend/*.tsbuildinfo
 .DS_Store
 Thumbs.db
 desktop.ini
+.data/chroma
+.data/chat_history.db
