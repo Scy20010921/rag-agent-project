@@ -35,6 +35,7 @@ class Settings:
     # LangSmith (可观测性)
     langsmith_api_key: str = os.getenv("LANGSMITH_API_KEY", "")
     langsmith_project: str = os.getenv("LANGSMITH_PROJECT", "rag-agent")
-
+    # Tavily
+    tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
 
 settings = Settings()

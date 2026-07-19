@@ -6,7 +6,7 @@ from app.core.langsmith_init import init_langsmith
 
 # 启动 LangSmith 追踪
 init_langsmith()
-print("222")
+print("223")
 
 app = FastAPI(title="RAG Agent Backend", version="1.0.0")
 
