@@ -27,61 +27,68 @@ export function useChat(question, deepThink, sessionsCtx, systemPrompt, getScrol
     if (ws && ws.readyState === WebSocket.OPEN) return
     ws = new WebSocket(WS_URL)
 
-    ws.onmessage = (event) => {
-      try {
-        const json = JSON.parse(event.data)
+ws.onmessage = (event) => {
+  try {
+    const json = JSON.parse(event.data)
 
-        if (json.event === 'chunk') {
-          if (!currentAssistantMsg) return
-          currentAssistantMsg.content += json.data
-          scrollToBottom()
-        }else if (json.event === 'status') {
-        const statusCard = reactive({ id: Date.now(), role: 'status', text: json.data })
-        messages.value.push(statusCard)
-        scrollToBottom()
-        }else if (json.event === 'done') {
-          isLoading.value = false
-          currentAssistantMsg = null
-          // ✅ 移除所有 role === 'status' 的消息
-          messages.value = messages.value.filter(m => m.role !== 'status')
-          sessionsCtx.refreshSessions?.()
-        } else if (json.event === 'stopped') {
-          isLoading.value = false
-          currentAssistantMsg = null
-        } else if (json.event === 'error') {
-          console.error('WS error:', json.data)
-          isLoading.value = false
-          currentAssistantMsg = null
-        } else if (json.event === 'session_created') {
-          sessionsCtx.currentSessionId.value = json.data.session_id
-          sessionsCtx.refreshSessions?.()
-        } else if (json.event === 'history') {
-          messages.value = json.data.map(m => ({ id: m.id, role: m.role, content: m.content }))
-          scrollToBottom()
-        } else if (json.event === 'tool_start') {
-          const toolCard = reactive({
-            id: Date.now(),
-            role: 'tool',
-            toolName: json.data.name,
-            status: 'running',
-            input: json.data.input,
-            output: ''
-          })
-          messages.value.push(toolCard)
-          scrollToBottom()
-        } else if (json.event === 'tool_end') {
-          for (let i = messages.value.length - 1; i >= 0; i--) {
-            const m = messages.value[i]
-            if (m.role === 'tool' && m.toolName === json.data.name && m.status === 'running') {
-              m.status = 'done'
-              m.output = json.data.output
-              break
-            }
-          }
-          scrollToBottom()
+    if (json.event === 'chunk') {
+      if (!currentAssistantMsg) return
+      let chunkData = json.data
+
+      // 🟢 新增：去除路由前缀
+      if (currentAssistantMsg.content === '') {
+        chunkData = chunkData.replace(/^(chat|知识库chat|knowledge)\s*/, '')
+      }
+
+      currentAssistantMsg.content += chunkData
+      scrollToBottom()
+    } else if (json.event === 'status') {
+      const statusCard = reactive({ id: Date.now(), role: 'status', text: json.data })
+      messages.value.push(statusCard)
+      scrollToBottom()
+    } else if (json.event === 'done') {
+      isLoading.value = false
+      currentAssistantMsg = null
+      // ✅ 移除所有 role === 'status' 的消息
+      messages.value = messages.value.filter(m => m.role !== 'status')
+      sessionsCtx.refreshSessions?.()
+    } else if (json.event === 'stopped') {
+      isLoading.value = false
+      currentAssistantMsg = null
+    } else if (json.event === 'error') {
+      console.error('WS error:', json.data)
+      isLoading.value = false
+      currentAssistantMsg = null
+    } else if (json.event === 'session_created') {
+      sessionsCtx.currentSessionId.value = json.data.session_id
+      sessionsCtx.refreshSessions?.()
+    } else if (json.event === 'history') {
+      messages.value = json.data.map(m => ({ id: m.id, role: m.role, content: m.content }))
+      scrollToBottom()
+    } else if (json.event === 'tool_start') {
+      const toolCard = reactive({
+        id: Date.now(),
+        role: 'tool',
+        toolName: json.data.name,
+        status: 'running',
+        input: json.data.input,
+        output: ''
+      })
+      messages.value.push(toolCard)
+      scrollToBottom()
+    } else if (json.event === 'tool_end') {
+      for (let i = messages.value.length - 1; i >= 0; i--) {
+        const m = messages.value[i]
+        if (m.role === 'tool' && m.toolName === json.data.name && m.status === 'running') {
+          m.status = 'done'
+          m.output = json.data.output
+          break
         }
-      } catch (e) {}
+      }
+      scrollToBottom()
     }
+  } catch (e) {}
+}
 
     ws.onclose = () => { isLoading.value = false; currentAssistantMsg = null }
     ws.onerror = () => { isLoading.value = false; currentAssistantMsg = null }
